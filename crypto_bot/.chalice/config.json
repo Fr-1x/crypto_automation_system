@@ -3,7 +3,7 @@
   "app_name": "crypto_bot",
   "environment_variables": {
     "EXCHANGE_NAME": "gemini",
-    "BASE_CURRENCY": "USD",
+    "BASE_CURRENCY": "USD"
   },
   "stages": {
     "dev": {
