@@ -15,7 +15,7 @@
         "percentage": 0
     },
     "SOLUSDT": {
-        "symbol": "SOL/USD",
+        "symbol": "SOL/USDT",
         "currency": "SOL",
         "percentage": 0.53
     }

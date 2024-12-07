@@ -2,13 +2,22 @@ import sys
 import time
 import logging
 import ccxt
+import json
 from decimal import Decimal
 from typing import Union, Dict, List
 from chalicelib import utils, trade_processing
 
 logger = logging.getLogger("app")
 
-class GeminiClient:
+class BinanceClient:
+    """
+    Binance spot exchange
+
+    Important notes:
+    - This is an initial implementation, use at your own risk.
+    - The binance API key must be set to allow connections from any IP address (disable default security controlls in API settings, IP restrictions can still be set).
+    """
+
     def __init__(self, base_currency: str):
         """
         Initialization with the base currency.
@@ -25,7 +34,7 @@ class GeminiClient:
 
     def connect(self, secret_name: str, sandbox: bool=False, max_retries: int=3) -> bool:
         """
-        Establishes connection to Gemini exchange.
+        Establishes connection to Binance exchange.
 
         Args:
             secret_name: The name of the secret in AWS Secrets Manager.
@@ -42,37 +51,50 @@ class GeminiClient:
                 api_key = api_key_manager.get_api_key()
                 api_secret = api_key_manager.get_api_secret()
 
-                exchange = ccxt.gemini({
+                logger.debug(f"Connecting to binance with key {api_key}")
+
+                exchange = ccxt.binance({
                     "apiKey": api_key,
                     "secret": api_secret,
+                    # TODO: proxy testing
+                    #"proxies": {
+                    #    "socksProxy": proxy,
+                    #    "wsSocksProxy": proxy,
+                    #},
                     "timeout": 6_000
                 })
+
+                # TODO: proxy testing
+                #if proxy:
+                #    exchange.socksProxy = proxy
+                #    exchange.wsSocksProxy = proxy
+
                 if sandbox:
                     exchange.set_sandbox_mode(True)
 
-                exchange.load_markets()
+                self.markets = exchange.load_markets()
+                logger.debug(json.dumps(self.markets))
 
                 self.client = exchange
                 return True
             
             except ccxt.NetworkError as e:
-                logging.error(f"Connection failed due to Network error: {str(e)}. Retrying the call.")
+                logger.error(f"Connection failed due to Network error: {str(e)}. Retrying the call.")
                 time.sleep(3)
                 retries +=1 
-
             except ccxt.ExchangeError as e:
-                logging.error(f"Exchange error while connecting: {e}")
+                logger.error(f"Exchange error while connecting: {e}")
                 return False
             except Exception as e:
-                logging.error(f"An unexpected error occurred: {e}")
+                logger.error(f"An unexpected error occurred: {e}")
                 raise e
             
-        logging.error(f"Failed to connect to exchange after {max_retries} retries.")
+        logger.error(f"Failed to connect to exchange after {max_retries} retries.")
         return False
 
     def create_limit_order(self, symbol: str, side: str, amount: float, order_price: float, max_retries: int=3):
         """
-        Places a limit buy order on the Gemini exchange.
+        Places a limit buy order on the Binance exchange.
 
         Args:
             symbol: The symbol representing the trading pair.
@@ -89,6 +111,7 @@ class GeminiClient:
         while retries < max_retries:
             try:
                 order = self.client.create_limit_order(symbol, side, amount, order_price)
+                logger.debug(f"Created limit order: {symbol} {side} {amount} {order_price}")
                 return order
             
             except ccxt.NetworkError as e:
@@ -96,23 +119,23 @@ class GeminiClient:
                     # Check if the order was placed
                     orders = self.client.fetch_open_orders(symbol)
                     if orders:
-                        logging.info(f"RequestTimeout occurred: Confirmed buy order placed by fetching open orders.")
+                        logger.info(f"RequestTimeout occurred: Confirmed buy order placed by fetching open orders.")
                         return orders[0]
                 
                 # Increment retry count
-                logging.warning(f"Place sell failed due to network error: {str(e)}. Retrying the call.")
+                logger.warning(f"Place sell failed due to network error: {str(e)}. Retrying the call.")
                 time.sleep(3)  # Adding a delay before retrying
                 retries += 1
             
             except ccxt.ExchangeError as e:
-                logging.error(f"Exchange error occurred: {e}")
+                logger.error(f"Exchange error occurred: {e}")
                 return None
         
             except Exception as e:
-                logging.error(f"An unexpected error occurred: {e}")
+                logger.error(f"An unexpected error occurred: {e}")
                 raise e
 
-        logging.error(f"Failed to place sell order after {max_retries} retries.")
+        logger.error(f"Failed to place sell order after {max_retries} retries.")
         return None
             
     def get_total_currency(self, currency: str, max_retries: int=3) -> Union[Decimal, None]:
@@ -136,6 +159,7 @@ class GeminiClient:
                 # Check if the currency exists in the balance
                 if currency in balance:
                     total_currency = balance[currency].get("total", 0)
+                    logger.debug(f"Retrieved total currency {currency}: {total_currency}")
                     return Decimal(str(total_currency))
                 else:
                     # Currency not found in the balance
@@ -188,19 +212,21 @@ class GeminiClient:
                 bid = Decimal(str(ticker.get("bid"))) if ticker.get("bid") is not None else None
                 ask = Decimal(str(ticker.get("ask"))) if ticker.get("ask") is not None else None
 
+                logger.debug(f"Retrieved bid and ask for {symbol}: {bid} {ask}")
+
                 return bid, ask
 
             except ccxt.NetworkError as e:
-                logging.error(f"Network error while fetching ticker: {e}")
+                logger.error(f"Network error while fetching ticker: {e}")
                 time.sleep(3)
                 retries += 1
 
             except ccxt.ExchangeError as e:
-                logging.error(f"Exchange error while fetching ticker: {e}")
+                logger.error(f"Exchange error while fetching ticker: {e}")
                 return None, None
             
             except Exception as e:
-                logging.error(f"An unexpected error occurred: {e}")
+                logger.error(f"An unexpected error occurred: {e}")
                 raise e
             
         # If retry limit is reached
@@ -234,19 +260,21 @@ class GeminiClient:
 
                 last = Decimal(str(ticker.get("last"))) if ticker.get("last") is not None else None
 
+                logger.debug(f"Retrieved last price for {symbol}: {last}")
+
                 return last
 
             except ccxt.NetworkError as e:
-                logging.error(f"Network error while fetching ticker: {e}")
+                logger.error(f"Network error while fetching ticker: {e}")
                 time.sleep(3)
                 retries += 1
 
             except ccxt.ExchangeError as e:
-                logging.error(f"Exchange error while fetching ticker: {e}")
+                logger.error(f"Exchange error while fetching ticker: {e}")
                 return None
             
             except Exception as e:
-                logging.error(f"An unexpected error occurred: {e}")
+                logger.error(f"An unexpected error occurred: {e}")
                 raise e
             
         # If retry limit is reached
@@ -268,7 +296,9 @@ class GeminiClient:
             try:
                 balance = self.client.fetch_balance()
                 available_funds_usd = balance.get("free").get(self.base_currency)
+                logger.debug(f"Available funds in {self.base_currency}: {available_funds_usd}")
                 active_configs = trade_processing.get_active_strategy_configs()
+                logger.debug(f"Active strategy: {active_configs}")
                 allocation_dict = dict()
                 allocation_dict["USD"] = available_funds_usd
                 for config in active_configs:
@@ -277,23 +307,24 @@ class GeminiClient:
                     trades = self.get_most_recent_trade(symbol)
                     if trades:
                         trade_value_usd = self.get_trade_value_usd(trades)
+                        logger.debug(f"Found most recent trade of {symbol} with value still owned: {trade_value_usd}")
                         allocation_dict[currency] = trade_value_usd
                     else:
                         allocation_dict[currency] = 0
-
+                logger.debug(f"Allocations: {allocation_dict}")
                 return allocation_dict
 
             except ccxt.NetworkError as e:
-                logging.error(f"Network error while fetching ticker: {e}")
+                logger.error(f"Network error while fetching ticker: {e}")
                 time.sleep(3)
                 retries += 1
 
             except ccxt.ExchangeError as e:
-                logging.error(f"Exchange error while fetching ticker: {e}")
+                logger.error(f"Exchange error while fetching ticker: {e}")
                 return None
             
             except Exception as e:
-                logging.error(f"An unexpected error occurred: {e}")
+                logger.error(f"An unexpected error occurred: {e}")
                 raise e
 
     def get_total_usd(self) -> float:
@@ -306,7 +337,8 @@ class GeminiClient:
             Total funds of account in USD.
         """
         allocation_dict = self.get_account_allocation()
-        return Decimal(str(sum(allocation_dict.values())))
+        sum = Decimal(str(sum(allocation_dict.values())))
+        logger.debug(f"Calculated total USD: {sum}")
             
     def get_most_recent_trade(self, symbol: str, max_retries: int=3) -> List[Dict]:
         """
@@ -330,7 +362,9 @@ class GeminiClient:
                     for i, trade in enumerate(reversed(trades)):
                         side = trade.get("side")
                         if (prev_trade_side == "buy") & (side == "sell"):
-                            return trades[-i:]
+                            most_recent_trade = trades[-i:]
+                            logger.debug(f"Retrieved most recent trade with open and close transactions: {most_recent_trade}")
+                            return most_recent_trade
                         elif side == "buy":
                             prev_trade_side = "buy"
                         elif side == "sell":
@@ -341,16 +375,16 @@ class GeminiClient:
                     return []
             
             except ccxt.NetworkError as e:
-                logging.error(f"Network error while fetching ticker: {e}")
+                logger.error(f"Network error while fetching ticker: {e}")
                 time.sleep(3)
                 retries += 1
 
             except ccxt.ExchangeError as e:
-                logging.error(f"Exchange error while fetching ticker: {e}")
+                logger.error(f"Exchange error while fetching ticker: {e}")
                 raise e
             
             except Exception as e:
-                logging.error(f"An unexpected error occurred: {e}")
+                logger.error(f"An unexpected error occurred: {e}")
                 raise e
             
     def get_trade_value_usd(self, trades: List[Dict]) -> float:
@@ -379,4 +413,9 @@ class GeminiClient:
         if amount_bought == 0:
             return 0
 
-        return trade_value_usd * round(amount_owned / amount_bought, 2)
+        proportion_owned = round(amount_owned / amount_bought, 2)
+        trade_value_usd_owned = trade_value_usd * proportion_owned
+
+        logger.debug(f"Calculated total USD trade value, proportion still owned, value still owned: {trade_value_usd} {proportion_owned} {trade_value_usd_owned}")
+
+        return trade_value_usd_owned

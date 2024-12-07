@@ -19,9 +19,10 @@ def receive_trade_signals():
     if "stop" in trade_out.get("order_comment").lower():
         secret_name = os.environ.get("SECRET_NAME")
         exchange_name = os.environ.get("EXCHANGE_NAME")
+        base_currency = os.environ.get("BASE_CURRENCY")
         sandbox = utils.get_env_var("SANDBOX")
 
-        exchange = trade_execution.Exchange(exchange_name)
+        exchange = trade_execution.Exchange(exchange_name, base_currency)
         exchange.connect(secret_name, sandbox=sandbox)
         app.log.debug(f"Succesfully connected to exchange: {exchange_name}")
 
@@ -47,9 +48,10 @@ def execute_trade_signals(event):
 
         secret_name = os.environ.get("SECRET_NAME")
         exchange_name = os.environ.get("EXCHANGE_NAME")
+        base_currency = os.environ.get("BASE_CURRENCY")
         sandbox = utils.get_env_var("SANDBOX")
 
-        exchange = trade_execution.Exchange(exchange_name)
+        exchange = trade_execution.Exchange(exchange_name, base_currency)
         exchange.connect(secret_name, sandbox=sandbox)
         app.log.debug(f"Succesfully connected to exchange: {exchange_name}")
 

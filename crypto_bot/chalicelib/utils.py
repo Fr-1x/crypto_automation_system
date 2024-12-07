@@ -208,6 +208,7 @@ def get_trade_precedence(trade_symbols: List) -> str:
     Returns:
         Symbol with the highest allocation percentage.
     """
+    print("Trade symbols:", trade_symbols)
     trade_precedence = max(trade_symbols, key=get_percentage_from_symbol, default=None)
 
     return trade_precedence

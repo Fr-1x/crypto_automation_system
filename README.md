@@ -117,6 +117,8 @@ This section is to go over important guidelines to ensure the system works as in
 - For similar reasons as above, avoid using this account for external crypto transfers. All strategies must start fresh, either with no trades at all or with the last trade fully closed.
 - Configured percentages in `strategy_config.json` should not exceed 98%, leaving 2% available for fees.
 - If using Buy-Side Boost, ensure that configured percentages in `strategy_config.json` are not the same, allowing for proper calculation of trade precedence.
+- For Gemini, the BASE_CURRENCY parameter in .chalice/config.json should be set to USD. For Binance, USDT or another supported base currency must be set.
+- The symbol parameters in `strategy_config.json` must contain the correct base curreny. E.g., BTC/USD or BTC/USDT. The ticker must be set according to TradingView, e.g., BTCUSD.
 
 # Getting Started
 To set up the automation system on your own machine, we'll follow these steps:

@@ -1,13 +1,17 @@
 import time
 from typing import List
 from decimal import Decimal, ROUND_HALF_UP
-from chalicelib.exchanges import gemini
+from chalicelib.exchanges import gemini, binance, binance_usdm
 from chalicelib import utils
 
 class Exchange:
-    def __init__(self, exchange_name: str):
+    def __init__(self, exchange_name: str, base_currency: str):
         if exchange_name == "gemini":
-            self.client = gemini.GeminiClient()
+            self.client = gemini.GeminiClient(base_currency)
+        elif exchange_name == "binance":
+            self.client = binance.BinanceClient(base_currency)
+        elif exchange_name == "binance_usdm":
+            self.client = binance_usdm.BinanceUsdmClient(base_currency)
 
     def connect(self, secret_name, sandbox=False, max_retries=3):
         self.client.connect(secret_name, sandbox, max_retries)
@@ -166,6 +170,7 @@ def buy_side_boost(exchange: Exchange, trades: List[dict], increment_pct: float=
 
         incoming_trade_symbols = [buy_signal.get("symbol") for buy_signal in buy_signals]
         current_trade_symbols = [utils.get_symbol_from_currency(key) for key, value in account_allocation_dict.items() if key != "USD" and value > 0]
+        print("Incoming and strategy trade symbols:", incoming_trade_symbols, current_trade_symbols)
         all_trade_symbols = incoming_trade_symbols + current_trade_symbols
 
         total_config_allocation_pct = sum([Decimal(str(strategy.get("percentage", 0))) for strategy in strategy_config.values()])
