@@ -9,13 +9,12 @@ from chalicelib import utils, trade_processing
 
 logger = logging.getLogger("app")
 
-class BinanceClient:
+class BybitClient:
     """
-    Binance spot exchange
+    Bybit spot exchange
 
     Important notes:
     - This is an initial implementation, use at your own risk.
-    - The binance API key must be set to allow connections from any IP address (disable default security controlls in API settings, IP restrictions can still be set).
     """
 
     def __init__(self, base_currency: str):
@@ -25,16 +24,16 @@ class BinanceClient:
         Args:
             base_currency: Currency used for trading and for the calculation of available funds, e.g., USD or USDT.
         """
+
         self.client = None
 
         if not base_currency:
             raise ValueError("base currency not set")
-
         self.base_currency = base_currency
 
     def connect(self, secret_name: str, sandbox: bool=False, max_retries: int=3) -> bool:
         """
-        Establishes connection to Binance exchange.
+        Establishes connection to Bybit exchange.
 
         Args:
             secret_name: The name of the secret in AWS Secrets Manager.
@@ -51,9 +50,9 @@ class BinanceClient:
                 api_key = api_key_manager.get_api_key()
                 api_secret = api_key_manager.get_api_secret()
 
-                logger.debug(f"Connecting to binance with key {api_key}")
+                logger.debug(f"Connecting to bybit with key {api_key}")
 
-                exchange = ccxt.binance({
+                exchange = ccxt.bybit({
                     "apiKey": api_key,
                     "secret": api_secret,
                     # TODO: proxy testing
@@ -77,24 +76,24 @@ class BinanceClient:
 
                 self.client = exchange
                 return True
-            
+
             except ccxt.NetworkError as e:
                 logger.error(f"Connection failed due to Network error: {str(e)}. Retrying the call.")
                 time.sleep(3)
-                retries +=1 
+                retries +=1
             except ccxt.ExchangeError as e:
                 logger.error(f"Exchange error while connecting: {e}")
                 return False
             except Exception as e:
                 logger.error(f"An unexpected error occurred: {e}")
                 raise e
-            
+
         logger.error(f"Failed to connect to exchange after {max_retries} retries.")
         return False
 
     def create_limit_order(self, symbol: str, side: str, amount: float, order_price: float, max_retries: int=3):
         """
-        Places a limit buy order on the Binance exchange.
+        Places a limit buy order on the bybit exchange.
 
         Args:
             symbol: The symbol representing the trading pair.
@@ -113,7 +112,7 @@ class BinanceClient:
                 order = self.client.create_limit_order(symbol, side, amount, order_price)
                 logger.debug(f"Created limit order: {symbol} {side} {amount} {order_price}")
                 return order
-            
+
             except ccxt.NetworkError as e:
                 if e == ccxt.RequestTimeout:
                     # Check if the order was placed
@@ -121,23 +120,23 @@ class BinanceClient:
                     if orders:
                         logger.info(f"RequestTimeout occurred: Confirmed buy order placed by fetching open orders.")
                         return orders[0]
-                
+
                 # Increment retry count
                 logger.warning(f"Place sell failed due to network error: {str(e)}. Retrying the call.")
                 time.sleep(3)  # Adding a delay before retrying
                 retries += 1
-            
+
             except ccxt.ExchangeError as e:
                 logger.error(f"Exchange error occurred: {e}")
                 return None
-        
+
             except Exception as e:
                 logger.error(f"An unexpected error occurred: {e}")
                 raise e
 
         logger.error(f"Failed to place sell order after {max_retries} retries.")
         return None
-            
+
     def get_total_currency(self, currency: str, max_retries: int=3) -> Union[Decimal, None]:
         """
         Get the total amount of a given currency owned by the account.
@@ -155,7 +154,7 @@ class BinanceClient:
             try:
                 # Fetch account balance
                 balance = self.client.fetch_balance()
-                
+
                 # Check if the currency exists in the balance
                 if currency in balance:
                     total_currency = balance[currency].get("total", 0)
@@ -165,31 +164,31 @@ class BinanceClient:
                     # Currency not found in the balance
                     logger.warning(f"Currency '{currency}' not found in the account balance.")
                     return None
-            
+
             except ccxt.NetworkError as e:
                 logger.error(f"{self.client.id} fetch_balance failed due to a network error: {str(e)}")
                 time.sleep(3)
                 retries += 1
-            
+
             except ccxt.ExchangeError as e:
                 logger.error(f"{self.client.id} fetch_balance failed due to user error: {str(e)}")
                 return None
-            
+
             except Exception as e:
                 logger.exception(f"{self.client.id} fetch_balance failed with: {str(e)}")
                 raise e
-        
+
         # If retry limit is reached
         logger.error(f"Failed to fetch account balance after {max_retries} retries.")
         return None
-    
+
     def get_bid_ask(self, symbol: str, max_retries: int=3) -> tuple:
         """
         Get bid ask spread of symbol on exchange.
 
         Args:
             exchange: The exchange object from ccxt.
-            symbol: Uppercase string literal name of a pair of traded currencies 
+            symbol: Uppercase string literal name of a pair of traded currencies
             with a slash in between.
             max_retries (optional): Maximum number of retries. Defaults to 3.
 
@@ -224,11 +223,11 @@ class BinanceClient:
             except ccxt.ExchangeError as e:
                 logger.error(f"Exchange error while fetching ticker: {e}")
                 return None, None
-            
+
             except Exception as e:
                 logger.error(f"An unexpected error occurred: {e}")
                 raise e
-            
+
         # If retry limit is reached
         logger.error(f"Failed to fetch ticker after {max_retries} retries.")
         return None, None
@@ -238,7 +237,7 @@ class BinanceClient:
         Get last price of symbol on exchange.
 
         Args:
-            symbol: Uppercase string literal name of a pair of traded currencies 
+            symbol: Uppercase string literal name of a pair of traded currencies
             with a slash in between.
             max_retries (optional): Maximum number of retries. Defaults to 3.
 
@@ -272,15 +271,15 @@ class BinanceClient:
             except ccxt.ExchangeError as e:
                 logger.error(f"Exchange error while fetching ticker: {e}")
                 return None
-            
+
             except Exception as e:
                 logger.error(f"An unexpected error occurred: {e}")
                 raise e
-            
+
         # If retry limit is reached
         logger.error(f"Failed to fetch ticker after {max_retries} retries.")
         return None
-    
+
     def get_account_allocation(self, max_retries: int=3) -> Dict:
         """
         Gets the cost in usd at time of purchase for each active strategy in the account.
@@ -307,9 +306,10 @@ class BinanceClient:
                     trades = self.get_most_recent_trade(symbol)
                     if trades:
                         trade_value_usd = self.get_trade_value_usd(trades)
-                        logger.debug(f"Found most recent trade of {symbol} with value still owned: {trade_value_usd}")
+                        logger.debug(f"Found most recent trade for {symbol}. The value still owned will be considered in the allocation: {trade_value_usd}.")
                         allocation_dict[currency] = trade_value_usd
                     else:
+                        logger.debug(f"Found no trades for {symbol}. It will not be considered in the allocation.")
                         allocation_dict[currency] = 0
                 logger.debug(f"Allocations: {allocation_dict}")
                 return allocation_dict
@@ -322,7 +322,7 @@ class BinanceClient:
             except ccxt.ExchangeError as e:
                 logger.error(f"Exchange error while fetching ticker: {e}")
                 return None
-            
+
             except Exception as e:
                 logger.error(f"An unexpected error occurred: {e}")
                 raise e
@@ -332,20 +332,20 @@ class BinanceClient:
         Get total USD value of account before any unrealized trades.
 
         This function allows us to correctly allocate funds to a given strategy.
-        
+
         Returns:
             Total funds of account in USD.
         """
         allocation_dict = self.get_account_allocation()
         sum = Decimal(str(sum(allocation_dict.values())))
         logger.debug(f"Calculated total USD: {sum}")
-            
+
     def get_most_recent_trade(self, symbol: str, max_retries: int=3) -> List[Dict]:
         """
         Get the most recent open or closed trade of given symbol.
 
         A trade starts with a buy and ends with a sell that sets balance to 0.
-        
+
         Args:
             symbol: Uppercase string literal name of a pair of traded currencies
             max_retries (optional): Maximum number of retries. Defaults to 3.
@@ -373,7 +373,7 @@ class BinanceClient:
                         return trades
                 else:
                     return []
-            
+
             except ccxt.NetworkError as e:
                 logger.error(f"Network error while fetching ticker: {e}")
                 time.sleep(3)
@@ -382,11 +382,11 @@ class BinanceClient:
             except ccxt.ExchangeError as e:
                 logger.error(f"Exchange error while fetching ticker: {e}")
                 raise e
-            
+
             except Exception as e:
                 logger.error(f"An unexpected error occurred: {e}")
                 raise e
-            
+
     def get_trade_value_usd(self, trades: List[Dict]) -> float:
         """
         Calculate proportion of original purchase value of trade in USD that is still owned.
@@ -419,3 +419,4 @@ class BinanceClient:
         logger.debug(f"Calculated total USD trade value, proportion still owned, value still owned: {trade_value_usd} {proportion_owned} {trade_value_usd_owned}")
 
         return trade_value_usd_owned
+

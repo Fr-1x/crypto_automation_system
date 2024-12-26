@@ -1,7 +1,7 @@
 import time
 from typing import List
 from decimal import Decimal, ROUND_HALF_UP
-from chalicelib.exchanges import gemini, binance, binance_usdm
+from chalicelib.exchanges import gemini, binance, binance_usdm, bybit
 from chalicelib import utils
 
 class Exchange:
@@ -12,6 +12,8 @@ class Exchange:
             self.client = binance.BinanceClient(base_currency)
         elif exchange_name == "binance_usdm":
             self.client = binance_usdm.BinanceUsdmClient(base_currency)
+        elif exchange_name == "bybit":
+            self.client = bybit.BybitClient(base_currency)
 
     def connect(self, secret_name, sandbox=False, max_retries=3):
         self.client.connect(secret_name, sandbox, max_retries)
