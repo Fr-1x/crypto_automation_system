@@ -55,6 +55,7 @@ class BybitClient:
                 exchange = ccxt.bybit({
                     "apiKey": api_key,
                     "secret": api_secret,
+                    "options": {'defaultType': 'spot' },
                     # TODO: proxy testing
                     #"proxies": {
                     #    "socksProxy": proxy,
